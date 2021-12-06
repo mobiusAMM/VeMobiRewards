@@ -4,9 +4,9 @@ pragma solidity ^0.5.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20Mintable.sol";
 
-interface IERC20Mintable is ERC20Mintable {}
+contract IERC20Mintable is ERC20Mintable {}
 
-interface NonTransferable is ERC20Mintable {
+contract NonTransferable is ERC20Mintable {
   /**
    * @dev See `IERC20.transfer`.
    *
