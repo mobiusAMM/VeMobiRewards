@@ -23,7 +23,6 @@ import "./Pausable.sol";
 
 // https://docs.synthetix.io/contracts/source/contracts/stakingrewards
 contract MobiStakingRewards is
-  IStakingRewards,
   RewardsDistributionRecipient,
   ReentrancyGuard,
   Pausable

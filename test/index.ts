@@ -1,66 +1,62 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { MobiStakingRewards } from "../typechain-types";
+import {
+  MobiStakingRewards,
+  IERC20Mintable,
+  NonTransferable,
+  MobiStakingRewards__factory,
+} from "../typechain-types";
 
 describe("Swap", function () {
   let stakingContract: MobiStakingRewards;
-  let rewardToken: IERC20;
-  let stakingToken: IERC20;
+  let rewardToken: IERC20Mintable;
+  let stakingToken: NonTransferable;
   let signer: string;
+  let otherSigner: string;
+  const INITIAL_MINT_AMOUNT = "100000000000000000";
 
   this.beforeAll(async () => {
-    const [owner] = await ethers.getSigners();
+    const [owner, other] = await ethers.getSigners();
     signer = await owner.getAddress();
-    const ERC20 = await ethers.getContractFactory("LPToken");
-    const Swap = ethers.getContractFactory("Swap");
+    otherSigner = await other.getAddress();
 
-    rewardToken = (await ERC20.deploy("Reward", "t1", "18")) as ERC20_T;
-    stakingToken = (await ERC20.deploy("Test 2", "t2", "18")) as ERC20_T;
-    swapContract = (await (
-      await Swap
-    ).deploy(
-      [token1.address, token2.address],
-      ["18", "18"],
-      "Test",
-      "t"
-    )) as SwapContract;
-    token1.mint(signer, "100000000000000000", { from: signer });
-    token2.mint(signer, "100000000000000000", { from: signer });
-    lpToken = ERC20.attach(await swapContract.getLpToken()) as ERC20_T;
+    const ERC20 = await ethers.getContractFactory("IERC20Mintable");
+    const VotingEscrow = await ethers.getContractFactory("NonTransferable");
+    const Staking = await ethers.getContractFactory("MobiStakingRewards");
+    const REWARD_AMOUNT = "8640000"; // 100 every second!
+
+    rewardToken = (await ERC20.deploy()) as IERC20Mintable;
+    stakingToken = (await VotingEscrow.deploy()) as NonTransferable;
+    stakingContract = (await Staking.deploy(
+      signer,
+      signer,
+      rewardToken.address,
+      stakingToken.address
+    )) as MobiStakingRewards;
+    rewardToken.mint(stakingContract.address, REWARD_AMOUNT, {
+      from: signer,
+    });
+    stakingToken.mint(signer, INITIAL_MINT_AMOUNT, { from: signer });
+    stakingToken.mint(otherSigner, INITIAL_MINT_AMOUNT, { from: signer });
+
+    stakingContract.notifyRewardAmount(REWARD_AMOUNT);
   });
-  it("Can be deposited into", async function () {
-    const expectedIncrease = "1000";
-    const initial = await lpToken.balanceOf(signer);
-    const expected = initial.add(expectedIncrease);
-
-    await token1.approve(swapContract.address, "500", { from: signer });
-    await token2.approve(swapContract.address, "500", { from: signer });
-
-    await swapContract.addLiquidity(["500", "500"], "999", { from: signer });
-    const actual = await lpToken.balanceOf(signer);
+  it("Queries the balance of a user", async function () {
+    const expected = INITIAL_MINT_AMOUNT;
+    const actual = await stakingContract.balanceOf(signer);
     expect(actual).equal(expected);
   });
-  it("Can facilitate a 1:1 swap", async function () {
-    // Add liquidity :)
-    await token1.approve(swapContract.address, "1000", { from: signer });
-    await token2.approve(swapContract.address, "500", { from: signer });
-    await swapContract.addLiquidity(["500", "500"], "999", { from: signer });
-
-    // Now test a swap
-    const expectedOut = "100";
-    const expected = (await token2.balanceOf(signer)).add(expectedOut);
-    const block = await ethers.provider.getBlock(
-      await ethers.provider.getBlockNumber()
-    );
-
-    await swapContract.swap(
-      token1.address,
-      token2.address,
-      "100",
-      "99",
-      block.timestamp + 100,
-      { from: signer }
-    );
-    expect(await token2.balanceOf(signer)).equal(expected);
+  it("Queries the total supply of Voting Escrow", async function () {
+    const expected = `${parseInt(INITIAL_MINT_AMOUNT) * 2}`;
+    const actual = await stakingContract.totalSupply();
+    expect(actual).equal(expected);
+  });
+  it("Rewards tokens!", async function () {
+    const balanceBefore = await rewardToken.balanceOf(signer);
+    await ethers.provider.send("evm_increaseTime", [3600]);
+    await ethers.provider.send("evm_mine", []);
+    await stakingContract.getReward({ from: signer });
+    const balanceAfter = await rewardToken.balanceOf(signer);
+    expect(balanceAfter.sub(balanceBefore).toNumber()).greaterThan(0);
   });
 });
