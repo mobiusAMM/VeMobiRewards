@@ -14,6 +14,7 @@ describe("Swap", function () {
   let signer: string;
   let otherSigner: string;
   const INITIAL_MINT_AMOUNT = "100000000000000000";
+  const REWARD_AMOUNT = "60480000"; // 100 every second!
 
   this.beforeAll(async () => {
     const [owner, other] = await ethers.getSigners();
@@ -23,7 +24,6 @@ describe("Swap", function () {
     const ERC20 = await ethers.getContractFactory("IERC20Mintable");
     const VotingEscrow = await ethers.getContractFactory("NonTransferable");
     const Staking = await ethers.getContractFactory("MobiStakingRewards");
-    const REWARD_AMOUNT = "8640000"; // 100 every second!
 
     rewardToken = (await ERC20.deploy()) as IERC20Mintable;
     stakingToken = (await VotingEscrow.deploy()) as NonTransferable;
@@ -58,5 +58,21 @@ describe("Swap", function () {
     await stakingContract.getReward({ from: signer });
     const balanceAfter = await rewardToken.balanceOf(signer);
     expect(balanceAfter.sub(balanceBefore).toNumber()).greaterThan(0);
+  });
+  it("Rewards tokens at the expected rate", async function () {
+    const rate = 100 / 2;
+    const time = 3600;
+
+    // Start Fresh
+    await stakingContract.getReward({ from: signer });
+    const balanceBefore = await rewardToken.balanceOf(signer);
+
+    await ethers.provider.send("evm_increaseTime", [time]);
+    await ethers.provider.send("evm_mine", []);
+    await stakingContract.getReward({ from: signer });
+    const balanceAfter = await rewardToken.balanceOf(signer);
+    expect(balanceAfter.sub(balanceBefore).toNumber()).equal(rate * time);
+    const leftToClaim = await stakingContract.earned(signer);
+    expect(leftToClaim.toNumber()).equal(0);
   });
 });
