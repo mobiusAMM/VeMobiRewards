@@ -71,7 +71,10 @@ describe("Swap", function () {
     await ethers.provider.send("evm_mine", []);
     await stakingContract.getReward({ from: signer });
     const balanceAfter = await rewardToken.balanceOf(signer);
-    expect(balanceAfter.sub(balanceBefore).toNumber()).equal(rate * time);
+    expect(balanceAfter.sub(balanceBefore).toNumber()).within(
+      rate * time,
+      rate * (time + 1)
+    );
     const leftToClaim = await stakingContract.earned(signer);
     expect(leftToClaim.toNumber()).equal(0);
   });
